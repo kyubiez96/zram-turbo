@@ -1,6 +1,6 @@
 id=zygisk_zram
 name=ZRAM Turbo - Optimized Swap
-version=v2.0
-versionCode=20
+version=v2.1
+versionCode=21
 author=RYU
 description=Aggressive zram swap with lz4 compression, tuned swappiness, and memory optimizations for low-RAM devices
