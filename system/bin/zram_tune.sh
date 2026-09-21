@@ -98,43 +98,41 @@ if [ "$ACTUAL_DISKSIZE" != "$ZRAM_SIZE_BYTES" ]; then
 fi
 
 # ============================================
-# SETUP SWAP - Try multiple methods
+# SETUP SWAP
+# Use /system/bin/mkswap and /system/bin/swapon
+# (BusyBox swapon doesn't support -p priority flag)
 # ============================================
 
-# Method 1: busybox mkswap + swapon
-log_msg "Trying busybox mkswap..."
-mkswap /dev/block/zram0 2>>$LOG
-log_msg "mkswap exit: $?"
+log_msg "Formatting zram0 as swap..."
+/system/bin/mkswap /dev/block/zram0 2>>$LOG
+MKSWAP_EXIT=$?
+log_msg "mkswap exit: $MKSWAP_EXIT"
 
-swapon /dev/block/zram0 -p 100 2>>$LOG
+if [ $MKSWAP_EXIT -ne 0 ]; then
+    log_msg "ERROR: mkswap failed"
+    exit 1
+fi
+
+# swapon with priority 100 — use system binary, not busybox
+/system/bin/swapon /dev/block/zram0 -p 100 2>>$LOG
 SWAPON_EXIT=$?
 log_msg "swapon exit: $SWAPON_EXIT"
 
-# Method 2: If swapon failed, try toybox/system paths
+# Fallback: if /system/bin/swapon doesn't exist, find any that supports -p
 if [ $SWAPON_EXIT -ne 0 ]; then
-    log_msg "Trying alternative swapon paths..."
-    for SWAPON_BIN in /data/adb/magisk/busybox swapon /system/bin/swapon /system/xbin/swapon; do
-        $SWAPON_BIN /dev/block/zram0 -p 100 2>>$LOG
+    log_msg "Fallback: searching for swapon with -p support..."
+    for BIN in /system/xbin/swapon /vendor/bin/swapon swapon; do
+        $BIN /dev/block/zram0 -p 100 2>>$LOG
         if [ $? -eq 0 ]; then
-            log_msg "swapon succeeded via: $SWAPON_BIN"
+            log_msg "swapon succeeded via: $BIN"
             SWAPON_EXIT=0
             break
         fi
     done
 fi
 
-# Method 3: Use busybox directly
 if [ $SWAPON_EXIT -ne 0 ]; then
-    log_msg "Trying busybox swapon..."
-    busybox swapon /dev/block/zram0 -p 100 2>>$LOG
-    SWAPON_EXIT=$?
-    log_msg "busybox swapon exit: $SWAPON_EXIT"
-fi
-
-if [ $SWAPON_EXIT -ne 0 ]; then
-    log_msg "ERROR: All swapon methods failed"
-    log_msg "PATH=$PATH"
-    which swapon 2>>$LOG
+    log_msg "ERROR: swapon failed on all paths"
     exit 1
 fi
 
